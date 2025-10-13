@@ -33,13 +33,13 @@ function TutorialPedroTech() {
     };
   }, []);
 
-  console.log("session", session);
+  //console.log("session", session);
   return (
     <>
       {session ? (
         <>
           <button onClick={() => logout()}>Log Out</button>
-          <TaskManager />
+          <TaskManager session={session} />
         </>
       ) : (
         <Auth />

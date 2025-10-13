@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase-client";
+import { Session } from "@supabase/supabase-js";
 
 interface Task {
   id: number;
@@ -8,7 +9,7 @@ interface Task {
   description: string;
 }
 
-function TaskManager() {
+function TaskManager({ session }: { session: Session }) {
   const [newTask, setNewTask] = useState({ title: "", description: "" });
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newDescription, setNewDescription] = useState("");
@@ -16,7 +17,10 @@ function TaskManager() {
   const handleSubmit = async (e: any) => {
     e.preventDefault();
 
-    const { error } = await supabase.from("tasks").insert(newTask).single();
+    const { error } = await supabase
+      .from("tasks")
+      .insert({ ...newTask, email: session.user.email })
+      .single();
 
     if (error) {
       console.error("Error Adding task: ", error.message);
@@ -63,6 +67,28 @@ function TaskManager() {
 
   useEffect(() => {
     fetchTasks();
+    const channels = supabase.getChannels();
+    console.log("existing channels are:", channels);
+  }, []);
+
+  useEffect(() => {
+    const channel = supabase.channel("tasks-channel");
+    channel
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "tasks" },
+        (payload) => {
+          const newTask = payload.new as Task;
+          setTasks((prev) => [...prev, newTask]);
+        }
+      )
+      .subscribe((status, error) => {
+        if (error) console.error("channel error:", error);
+        console.log("Subscrition status:", status);
+      });
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   //console.log("tasks =", tasks);
