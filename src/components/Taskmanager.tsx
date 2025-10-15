@@ -109,7 +109,6 @@ function TaskManager({ session }: { session: Session }) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "tasks" },
         (payload) => {
-          console.log("payload (INSERT):", payload);
           const newTask = payload.new as Task;
           setTasks((prev) => [...prev, newTask]);
         }
@@ -117,10 +116,20 @@ function TaskManager({ session }: { session: Session }) {
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "tasks" },
-        async (payload) => {
-          console.log("payload (DELETE):", payload);
-          //const newTask = payload.new as Task;
+        async () => {
           await fetchTasks();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "tasks" },
+        (payload) => {
+          const changedTask = payload.new as Task;
+          setTasks((prev) =>
+            prev.map((currentTask) =>
+              currentTask.id === changedTask.id ? changedTask : currentTask
+            )
+          );
         }
       );
     channel.subscribe((status, error) => {
