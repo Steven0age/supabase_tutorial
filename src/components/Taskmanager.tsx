@@ -100,8 +100,6 @@ function TaskManager({ session }: { session: Session }) {
 
   useEffect(() => {
     fetchTasks();
-    const channels = supabase.getChannels();
-    //console.log("existing channels are:", channels);
   }, []);
 
   useEffect(() => {
@@ -111,14 +109,24 @@ function TaskManager({ session }: { session: Session }) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "tasks" },
         (payload) => {
+          console.log("payload (INSERT):", payload);
           const newTask = payload.new as Task;
           setTasks((prev) => [...prev, newTask]);
         }
       )
-      .subscribe((status, error) => {
-        if (error) console.error("channel error:", error);
-        console.log("Subscription status:", status);
-      });
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "tasks" },
+        async (payload) => {
+          console.log("payload (DELETE):", payload);
+          //const newTask = payload.new as Task;
+          await fetchTasks();
+        }
+      );
+    channel.subscribe((status, error) => {
+      if (error) console.error("channel error:", error);
+      console.log("Subscription status:", status);
+    });
     return () => {
       supabase.removeChannel(channel);
     };
@@ -135,6 +143,7 @@ function TaskManager({ session }: { session: Session }) {
         <input
           type="text"
           placeholder="Task Title"
+          value={newTask.title}
           onChange={(e) =>
             setNewTask((prev) => ({ ...prev, title: e.target.value }))
           }
@@ -142,6 +151,7 @@ function TaskManager({ session }: { session: Session }) {
         />
         <textarea
           placeholder="Task Description"
+          value={newTask.description}
           onChange={(e) =>
             setNewTask((prev) => ({ ...prev, description: e.target.value }))
           }
@@ -149,7 +159,11 @@ function TaskManager({ session }: { session: Session }) {
         />
 
         <input type="file" accept="images/*" onChange={handleFileChange} />
-        <button type="submit" style={{ padding: "0.5rem 1rem" }}>
+        <button
+          type="submit"
+          disabled={!newTask.title}
+          style={{ padding: "0.5rem 1rem" }}
+        >
           Add Task
         </button>
       </form>
