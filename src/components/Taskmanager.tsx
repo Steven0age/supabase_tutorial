@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import { supabase } from "../supabase-client";
 import { Session } from "@supabase/supabase-js";
 
@@ -7,19 +7,27 @@ interface Task {
   created_at: string;
   title: string;
   description: string;
+  image_url: string;
 }
 
 function TaskManager({ session }: { session: Session }) {
   const [newTask, setNewTask] = useState({ title: "", description: "" });
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newDescription, setNewDescription] = useState("");
+  const [taskImage, setTaskImage] = useState<File | null>(null);
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
 
+    let imageUrl: string | null = null;
+
+    if (taskImage) {
+      imageUrl = await uploadImage(taskImage);
+    }
+
     const { error } = await supabase
       .from("tasks")
-      .insert({ ...newTask, email: session.user.email })
+      .insert({ ...newTask, email: session.user.email, image_url: imageUrl })
       .single();
 
     if (error) {
@@ -65,10 +73,35 @@ function TaskManager({ session }: { session: Session }) {
     }
   };
 
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setTaskImage(e.target.files[0]);
+    }
+  };
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    const filePath = `${file.name}-${Date.now()}`;
+
+    const { error } = await supabase.storage
+      .from("tasks-images")
+      .upload(filePath, file);
+
+    if (error) {
+      console.error("Error uploading image:", error.message);
+      return null;
+    }
+
+    const { data } = await supabase.storage
+      .from("tasks-images")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  };
+
   useEffect(() => {
     fetchTasks();
     const channels = supabase.getChannels();
-    console.log("existing channels are:", channels);
+    //console.log("existing channels are:", channels);
   }, []);
 
   useEffect(() => {
@@ -84,7 +117,7 @@ function TaskManager({ session }: { session: Session }) {
       )
       .subscribe((status, error) => {
         if (error) console.error("channel error:", error);
-        console.log("Subscrition status:", status);
+        console.log("Subscription status:", status);
       });
     return () => {
       supabase.removeChannel(channel);
@@ -114,6 +147,8 @@ function TaskManager({ session }: { session: Session }) {
           }
           style={{ width: "100%", marginBottom: "0.5rem", padding: "0.5rem" }}
         />
+
+        <input type="file" accept="images/*" onChange={handleFileChange} />
         <button type="submit" style={{ padding: "0.5rem 1rem" }}>
           Add Task
         </button>
@@ -134,6 +169,8 @@ function TaskManager({ session }: { session: Session }) {
             <div>
               <h3>{task.title}</h3>
               <p>{task.description}</p>
+              <img src={task.image_url} style={{ height: "70px" }} alt="" />
+              <br />
               <textarea
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="Updated description..."
